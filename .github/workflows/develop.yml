@@ -6,19 +6,6 @@ on:
       - develop
 
 jobs:
-  test:
-    runs-on:
-      - self-hosted
-      - ect1250
-
-    name: Develop CI
-
-on:
-  push:
-    branches:
-      - develop
-
-jobs:
   runner-test:
     runs-on:
       - self-hosted
