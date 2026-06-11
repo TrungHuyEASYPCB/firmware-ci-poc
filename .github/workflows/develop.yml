@@ -6,19 +6,22 @@ on:
       - develop
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  runner-test:
+    runs-on:
+      - self-hosted
+      - ect1250
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Verify Repository
+      - name: Runner Information
         run: |
-          echo "CI is running"
-          ls -la
+          echo "===== RUNNER INFO ====="
+          hostname
+          whoami
+          pwd
+          uname -a
+
+      - name: Show Labels
+        run: |
+          echo "Runner connected successfully"
