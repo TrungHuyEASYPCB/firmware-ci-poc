@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Build output
+build/
+release/
+firmware-test
+
+# Runner workspace
+_work/
+
+# Temporary files
+*.log
+*.tmp
