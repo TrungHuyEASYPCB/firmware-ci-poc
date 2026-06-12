@@ -6,86 +6,81 @@ on:
       - develop
 
 jobs:
+  build:
+    strategy:
+      matrix:
+        board:
+          - nrf52840dk
 
-build:
+    runs-on:
+      - self-hosted
+      - ect1250
 
-strategy:
-  matrix:
-    board:
-      - nrf52840dk
+    container:
+      image: ghcr.io/trunghuyeasypcb/firmware-builder:1.1
 
-runs-on:
-  - self-hosted
-  - ect1250
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-container:
-  image: ghcr.io/trunghuyeasypcb/firmware-builder:1.1
+      - name: Container Information
+        run: |
+          echo "===== CONTAINER INFO ====="
+          hostname
+          whoami
+          pwd
+          gcc --version
 
-steps:
+      - name: Build Firmware
+        run: |
+          chmod +x scripts/build.sh
+          ./scripts/build.sh
 
-  - name: Checkout
-    uses: actions/checkout@v4
+      - name: Package Firmware
+        run: |
+          chmod +x scripts/package.sh
+          ./scripts/package.sh
 
-  - name: Container Information
-    run: |
-      echo "===== CONTAINER INFO ====="
-      hostname
-      whoami
-      pwd
-      gcc --version
+      - name: Flash Device
+        run: |
+          chmod +x scripts/flash.sh
+          ./scripts/flash.sh ${{ matrix.board }}
 
-  - name: Build Firmware
-    run: |
-      chmod +x scripts/build.sh
-      ./scripts/build.sh
+      - name: Read Package Name
+        run: |
+          cat release/package.env >> $GITHUB_ENV
 
-  - name: Package Firmware
-    run: |
-      chmod +x scripts/package.sh
-      ./scripts/package.sh
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: release/${{ env.PACKAGE_NAME }}
 
-  - name: Flash Device
-    run: |
-      chmod +x scripts/flash.sh
-      ./scripts/flash.sh ${{ matrix.board }}
+      - name: Validation
+        run: |
+          chmod +x scripts/validate.sh
+          ./scripts/validate.sh
 
-  - name: Read Package Name
-    run: |
-      cat release/package.env >> $GITHUB_ENV
+  hardware-validation:
+    needs: build
 
-  - name: Upload Artifact
-    uses: actions/upload-artifact@v4
-    with:
-      name: ${{ env.PACKAGE_NAME }}
-      path: release/${{ env.PACKAGE_NAME }}
+    runs-on:
+      - self-hosted
+      - ect1250
 
-  - name: Validation
-    run: |
-      chmod +x scripts/validate.sh
-      ./scripts/validate.sh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-hardware-validation:
+      - name: Device Detection
+        run: |
+          echo "===================="
+          echo "DEVICE DETECTION"
+          echo "===================="
 
-needs: build
+          nrfjprog --ids
 
-runs-on:
-  - self-hosted
-  - ect1250
-
-steps:
-
-  - name: Checkout
-    uses: actions/checkout@v4
-
-  - name: Device Detection
-    run: |
-      echo "===================="
-      echo "DEVICE DETECTION"
-      echo "===================="
-
-      nrfjprog --ids
-
-  - name: Device Inventory
-    run: |
-      chmod +x scripts/device_detect.sh
-      ./scripts/device_detect.sh
+      - name: Device Inventory
+        run: |
+          chmod +x scripts/device_detect.sh
+          ./scripts/device_detect.sh
