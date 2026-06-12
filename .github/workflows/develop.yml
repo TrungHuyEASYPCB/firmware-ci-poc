@@ -12,7 +12,7 @@ jobs:
       - ect1250
 
     container:
-      image: gcc:14
+      image: ghcr.io/trunghuyeasypcb/firmware-builder:1.0
 
     steps:
       - name: Checkout
@@ -36,8 +36,13 @@ jobs:
           chmod +x scripts/package.sh
           ./scripts/package.sh
 
+      - name: Read Package Name
+        run: |
+          cat release/package.env >> $GITHUB_ENV
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-dev
-          path: release/*.tar.gz
+          name: ${{ env.PACKAGE_NAME }}
+          path: release/${{ env.PACKAGE_NAME }}
+          

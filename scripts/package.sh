@@ -6,7 +6,11 @@ VERSION=$(date +%Y%m%d-%H%M%S)
 
 mkdir -p release
 
-tar -czf release/firmware-${VERSION}.tar.gz build/
+PACKAGE_NAME="firmware-${VERSION}.tar.gz"
+
+tar -czf release/${PACKAGE_NAME} build/
+
+echo "PACKAGE_NAME=${PACKAGE_NAME}" > release/package.env
 
 echo "===== PACKAGE DONE ====="
 
