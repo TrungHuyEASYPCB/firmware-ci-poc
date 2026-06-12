@@ -7,6 +7,12 @@ on:
 
 jobs:
   build:
+
+    strategy:
+      matrix:
+        board:
+          - nrf52840dk
+
     runs-on:
       - self-hosted
       - ect1250
@@ -35,6 +41,11 @@ jobs:
         run: |
           chmod +x scripts/package.sh
           ./scripts/package.sh
+
+      - name: Flash Device
+        run: |
+          chmod +x scripts/flash.sh
+          ./scripts/flash.sh ${{ matrix.board }}
 
       - name: Read Package Name
         run: |

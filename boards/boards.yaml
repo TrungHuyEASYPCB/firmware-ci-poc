@@ -1,0 +1,19 @@
+boards:
+
+  nrf52840dk:
+    vendor: nordic
+    flash_method: west
+    transport: usb
+    serial: 1050266123
+
+  nrf9160dk:
+    vendor: nordic
+    flash_method: west
+    transport: usb
+    serial: 1050549987
+
+  esp32:
+    vendor: espressif
+    flash_method: esptool
+    transport: uart
+    port: /dev/ttyUSB0
