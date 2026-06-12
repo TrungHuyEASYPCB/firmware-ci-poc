@@ -18,7 +18,7 @@ jobs:
       - ect1250
 
     container:
-      image: ghcr.io/trunghuyeasypcb/firmware-builder:1.0
+      image: ghcr.io/trunghuyeasypcb/firmware-builder:1.1
 
     steps:
       - name: Checkout
@@ -61,3 +61,8 @@ jobs:
         run: |
           chmod +x scripts/device_inventory.sh
           ./scripts/device_inventory.sh
+
+      - name: Validation
+        run: |
+          chmod +x scripts/validate.sh
+          ./scripts/validate.sh

@@ -12,8 +12,12 @@ RUN apt-get update && apt-get install -y \
     git \
     tar \
     zip \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /workspace
+RUN pip3 install --break-system-packages \
+    pytest \
+    pyyaml
 
-CMD ["/bin/bash"]
+WORKDIR /workspace
