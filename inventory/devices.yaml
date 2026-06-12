@@ -1,6 +1,5 @@
 devices:
-
   dut-01:
     board: nrf52840dk
-    serial: TBD
+    serial: 1050325823
     status: ready

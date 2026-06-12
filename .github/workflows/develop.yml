@@ -57,6 +57,11 @@ jobs:
           name: ${{ env.PACKAGE_NAME }}
           path: release/${{ env.PACKAGE_NAME }}
           
+      - name: Device Detection
+        run: |
+          chmod +x scripts/device_detect.sh
+          ./scripts/device_detect.sh
+      
       - name: Device Inventory
         run: |
           chmod +x scripts/device_inventory.sh
