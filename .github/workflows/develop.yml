@@ -57,3 +57,7 @@ jobs:
           name: ${{ env.PACKAGE_NAME }}
           path: release/${{ env.PACKAGE_NAME }}
           
+      - name: Device Inventory
+        run: |
+          chmod +x scripts/device_inventory.sh
+          ./scripts/device_inventory.sh
