@@ -1,7 +1,29 @@
 devices:
   dut-01:
     role: preview
-    board: nrf52dk/nrf52832
-    serial: "1050325823"
-    uart: /dev/ttyACM0
     status: ready
+
+    vendor: nordic
+    probe: jlink
+    device_type: development_kit
+
+    board: nrf52dk/nrf52832
+    soc: nrf52832
+    serial: "1050325823"
+
+    uart: auto
+    preferred_vcom: VCOM0
+
+    runner: ect1250
+    location: local_lab
+
+    capabilities:
+      - build
+      - flash
+      - uart
+      - hil
+
+    test_profiles:
+      - smoke
+
+    description: nRF52 DK preview HIL device

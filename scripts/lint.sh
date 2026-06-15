@@ -56,6 +56,10 @@ else
 fi
 
 echo ""
+echo "Validate HIL inventory and test matrix"
+python3 scripts/validate_inventory.py
+
+echo ""
 echo "Check YAML syntax"
 python3 scripts/check_yaml.py \
   .github/workflows/*.yml \
