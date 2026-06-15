@@ -1,0 +1,7 @@
+#pragma once
+
+#define FW_VERSION "@FW_VERSION@"
+#define FW_GIT_COMMIT "@FW_GIT_COMMIT@"
+#define FW_GIT_REF "@FW_GIT_REF@"
+#define FW_BOARD "@FW_BOARD@"
+#define FW_BUILD_TIME "@FW_BUILD_TIME@"
