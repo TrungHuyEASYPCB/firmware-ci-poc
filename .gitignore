@@ -236,3 +236,4 @@ release/
 *.bin
 *.map
 *.uf2
+hil-results/
