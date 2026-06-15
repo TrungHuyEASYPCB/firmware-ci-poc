@@ -1,5 +1,7 @@
 #!/bin/bash
 
+git config --global --add safe.directory "$(pwd)"
+
 set -e
 
 VERSION=$(date +%Y%m%d-%H%M%S)
