@@ -228,3 +228,11 @@ _work/
 # Temporary files
 *.log
 *.tmp
+# Zephyr/NCS build output
+build/
+release/
+*.elf
+*.hex
+*.bin
+*.map
+*.uf2
