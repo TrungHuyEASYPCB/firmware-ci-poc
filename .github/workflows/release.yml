@@ -68,6 +68,14 @@ jobs:
         run: |
           ./scripts/validate.sh
 
+      - name: Upload HIL reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hil-reports
+          path: |
+            hil-results/**
+
       - name: Package release firmware
         run: |
           VERSION="${VERSION}" ./scripts/package.sh

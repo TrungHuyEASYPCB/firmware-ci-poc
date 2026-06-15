@@ -12,6 +12,8 @@ pytestmark = pytest.mark.hil
 SERIAL = os.environ.get("SERIAL", "1050325823")
 UART_PORT = os.environ.get("UART_PORT", "/dev/ttyACM0")
 EXPECTED_BOARD = os.environ.get("EXPECTED_BOARD", os.environ.get("BOARD", "nrf52dk/nrf52832"))
+UART_LOG_FILE = Path(os.environ.get("UART_LOG_FILE", "hil-results/uart.log"))
+RESET_LOG_FILE = Path(os.environ.get("RESET_LOG_FILE", "hil-results/reset.log"))
 
 
 def run_command(command, check=True):
@@ -48,6 +50,9 @@ def get_expected_commit():
 
 
 def capture_uart_after_reset():
+    UART_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    RESET_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
     run_command([
         "stty",
         "-F",
@@ -77,12 +82,15 @@ def capture_uart_after_reset():
         check=False,
     )
 
+    reset_output = reset_result.stdout + reset_result.stderr
+    RESET_LOG_FILE.write_text(reset_output, encoding="utf-8")
+
     stdout, stderr = cat_process.communicate(timeout=25)
     uart_log = stdout + stderr
+    UART_LOG_FILE.write_text(uart_log, encoding="utf-8")
 
     print("\n===== NRFJPROG RESET OUTPUT =====")
-    print(reset_result.stdout)
-    print(reset_result.stderr)
+    print(reset_output)
 
     print("\n===== UART LOG =====")
     print(uart_log)
