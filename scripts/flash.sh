@@ -1,16 +1,26 @@
 #!/bin/bash
-
-BOARD=$1
+set -e
 
 echo "===================="
-echo "FLASH FRAMEWORK"
+echo "FLASH DEVICE"
 echo "===================="
 
-echo "Board: $BOARD"
+SERIAL="${SERIAL:-1050325823}"
+HEX_FILE="${HEX_FILE:-build/merged.hex}"
 
-if grep -q "$BOARD:" boards/boards.yaml; then
-    echo "Board found in registry"
-else
-    echo "Board not found"
-    exit 1
+if [ ! -f "$HEX_FILE" ]; then
+  echo "HEX file not found: $HEX_FILE"
+  exit 1
 fi
+
+echo "Serial: $SERIAL"
+echo "HEX: $HEX_FILE"
+
+nrfjprog \
+  --program "$HEX_FILE" \
+  --sectorerase \
+  --verify \
+  --reset \
+  --snr "$SERIAL"
+
+echo "Flash completed"

@@ -1,5 +1,6 @@
 devices:
   dut-01:
-    board: nrf52840dk
+    board: nrf52dk/nrf52832
     serial: 1050325823
+    uart: /dev/ttyACM0
     status: ready
