@@ -1,6 +1,7 @@
 devices:
   dut-01:
+    role: preview
     board: nrf52dk/nrf52832
-    serial: 1050325823
+    serial: "1050325823"
     uart: /dev/ttyACM0
     status: ready
