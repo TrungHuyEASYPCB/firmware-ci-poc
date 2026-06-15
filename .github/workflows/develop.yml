@@ -72,6 +72,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Debug USB
+        run: |
+          echo "=======WHOAMI======="
+          whoami
+
+          echo ""
+          echo "=====NRFJPROG======"
+          which nrfjprog || true
+
+          echo ""
+          echo "=====NRF IDS======"
+          which --ids || true
+
+          echo ""
+          echo "=====LSUSB======"
+          lsusb || true
+
+          echo ""
+          echo "=====SERIAL======"
+          ls -l /dev/serial/ny-id || true
+
+          echo ""
+          echo "=====TTY======"
+          ls -l/dev/ttyACM* || true
+
       - name: Device Detection
         run: |
           echo "===================="
