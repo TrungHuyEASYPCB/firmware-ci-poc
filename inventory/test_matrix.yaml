@@ -1,0 +1,20 @@
+test_matrix:
+  smoke-preview:
+    enabled: true
+    device_role: preview
+    test_profile: smoke
+    description: Smoke HIL validation on preview DUT
+
+# Future examples:
+#
+#  regression-preview:
+#    enabled: false
+#    device_role: preview
+#    test_profile: regression
+#    description: Extended HIL regression on preview DUT
+#
+#  smoke-production:
+#    enabled: false
+#    device_role: production
+#    test_profile: smoke
+#    description: Smoke validation on production DUT
