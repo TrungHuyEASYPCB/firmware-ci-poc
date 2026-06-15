@@ -15,3 +15,8 @@ echo "PACKAGE_NAME=${PACKAGE_NAME}" > release/package.env
 echo "===== PACKAGE DONE ====="
 
 ls -lah release
+
+COMMIT=$(git rev-parse --short HEAD)
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+VERSION=$(date +%Y%m%d-%H%M%S)
