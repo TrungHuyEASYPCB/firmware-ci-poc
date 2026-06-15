@@ -1,19 +1,17 @@
 import os
-import pytest
 import subprocess
 import time
+from pathlib import Path
+
+import pytest
+
+
+pytestmark = pytest.mark.hil
 
 
 SERIAL = os.environ.get("SERIAL", "1050325823")
 UART_PORT = os.environ.get("UART_PORT", "/dev/ttyACM0")
-pytestmark = pytest.mark.hil
-
-
-EXPECTED_TEXTS = [
-    "BOOT OK",
-    "Firmware CI PoC started",
-    "Heartbeat",
-]
+EXPECTED_BOARD = os.environ.get("EXPECTED_BOARD", os.environ.get("BOARD", "nrf52dk/nrf52832"))
 
 
 def run_command(command, check=True):
@@ -25,22 +23,31 @@ def run_command(command, check=True):
     )
 
 
-def test_uart_port_exists():
-    assert os.path.exists(UART_PORT), f"UART port not found: {UART_PORT}"
+def get_expected_version():
+    env_version = os.environ.get("EXPECTED_VERSION")
+    if env_version:
+        return env_version
+
+    version_file = Path("RELEASE_VERSION")
+    if version_file.exists():
+        return version_file.read_text().strip()
+
+    return "0.0.0-dev"
 
 
-def test_device_detected_by_nrfjprog():
-    result = run_command(["nrfjprog", "--ids"], check=False)
+def get_expected_commit():
+    env_commit = os.environ.get("EXPECTED_COMMIT")
+    if env_commit:
+        return env_commit
 
-    combined_output = result.stdout + result.stderr
+    result = run_command(["git", "rev-parse", "--short", "HEAD"], check=False)
+    if result.returncode == 0:
+        return result.stdout.strip()
 
-    assert SERIAL in combined_output, (
-        f"Device serial {SERIAL} not found in nrfjprog output:\n"
-        f"{combined_output}"
-    )
+    return "unknown"
 
 
-def test_firmware_uart_log_after_reset():
+def capture_uart_after_reset():
     run_command([
         "stty",
         "-F",
@@ -57,7 +64,7 @@ def test_firmware_uart_log_after_reset():
     ])
 
     cat_process = subprocess.Popen(
-        ["timeout", "15", "cat", UART_PORT],
+        ["timeout", "20", "cat", UART_PORT],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -70,7 +77,7 @@ def test_firmware_uart_log_after_reset():
         check=False,
     )
 
-    stdout, stderr = cat_process.communicate(timeout=20)
+    stdout, stderr = cat_process.communicate(timeout=25)
     uart_log = stdout + stderr
 
     print("\n===== NRFJPROG RESET OUTPUT =====")
@@ -80,8 +87,42 @@ def test_firmware_uart_log_after_reset():
     print("\n===== UART LOG =====")
     print(uart_log)
 
-    assert any(text in uart_log for text in EXPECTED_TEXTS), (
-        "Expected firmware log was not found in UART output.\n"
-        f"Expected one of: {EXPECTED_TEXTS}\n"
+    return uart_log
+
+
+def test_uart_port_exists():
+    assert os.path.exists(UART_PORT), f"UART port not found: {UART_PORT}"
+
+
+def test_device_detected_by_nrfjprog():
+    result = run_command(["nrfjprog", "--ids"], check=False)
+    combined_output = result.stdout + result.stderr
+
+    assert SERIAL in combined_output, (
+        f"Device serial {SERIAL} not found in nrfjprog output:\n"
+        f"{combined_output}"
+    )
+
+
+def test_firmware_uart_provenance_after_reset():
+    expected_version = get_expected_version()
+    expected_commit = get_expected_commit()
+
+    uart_log = capture_uart_after_reset()
+
+    required_texts = [
+        "BOOT OK",
+        f"Firmware version: {expected_version}",
+        f"Git commit: {expected_commit}",
+        f"Board: {EXPECTED_BOARD}",
+        "Firmware CI PoC started",
+        "Heartbeat",
+    ]
+
+    missing = [text for text in required_texts if text not in uart_log]
+
+    assert not missing, (
+        "Missing expected firmware provenance text in UART log.\n"
+        f"Missing: {missing}\n"
         f"UART log:\n{uart_log}"
     )
