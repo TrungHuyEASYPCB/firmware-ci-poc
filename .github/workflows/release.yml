@@ -1,0 +1,98 @@
+name: GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version without v prefix, for example 0.2.1'
+        required: true
+        default: '0.2.1'
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+    name: Build, HIL Validate and Publish Release
+    runs-on:
+      - self-hosted
+      - ect1250
+
+    env:
+      BOARD: nrf52dk/nrf52832
+      SERIAL: "1050325823"
+      UART_PORT: /dev/ttyACM0
+      HEX_FILE: build/merged.hex
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            TAG_NAME="${GITHUB_REF_NAME}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            TAG_NAME="v${VERSION}"
+          fi
+
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "TAG_NAME=${TAG_NAME}" >> "$GITHUB_ENV"
+
+          echo "VERSION=${VERSION}"
+          echo "TAG_NAME=${TAG_NAME}"
+
+      - name: Prepare scripts
+        run: |
+          chmod +x scripts/build.sh
+          chmod +x scripts/flash.sh
+          chmod +x scripts/validate.sh
+          chmod +x scripts/package.sh
+
+      - name: Build Zephyr firmware
+        run: |
+          ./scripts/build.sh
+
+      - name: Flash release device
+        run: |
+          ./scripts/flash.sh
+
+      - name: Pytest HIL regression
+        run: |
+          ./scripts/validate.sh
+
+      - name: Package release firmware
+        run: |
+          VERSION="${VERSION}" ./scripts/package.sh
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-release-package
+          path: |
+            release/*.tar.gz
+            release/*.hex
+            release/manifest.json
+            release/checksums.sha256
+            release/release-notes.md
+            release/package.env
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Firmware ${{ env.TAG_NAME }}
+          body_path: release/release-notes.md
+          files: |
+            release/*.tar.gz
+            release/*.hex
+            release/manifest.json
+            release/checksums.sha256
+            release/package.env
