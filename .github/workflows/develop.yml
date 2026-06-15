@@ -1,0 +1,76 @@
+name: Develop CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+  
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build-flash-validate:
+    name: Build, Flash and UART Validate
+    runs-on:
+      - self-hosted
+      - ect1250
+
+    env:
+      BOARD: nrf52dk/nrf52832
+      SERIAL: "1050325823"
+      UART_PORT: /dev/ttyACM0
+      HEX_FILE: build/merged.hex
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show runner environment
+        run: |
+          echo "Hostname:"
+          hostname
+
+          echo ""
+          echo "Current user:"
+          whoami
+
+          echo ""
+          echo "West:"
+          which west || true
+          west --version
+
+          echo ""
+          echo "Nordic devices:"
+          nrfjprog --ids || true
+
+          echo ""
+          echo "COM ports:"
+          nrfjprog --com || true
+
+      - name: Prepare scripts
+        run: |
+          chmod +x scripts/build.sh
+          chmod +x scripts/flash.sh
+          chmod +x scripts/validate.sh
+
+      - name: Build Zephyr firmware
+        run: |
+          ./scripts/build.sh
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zephyr-firmware
+          path: |
+            build/merged.hex
+            build/firmware-ci-poc/zephyr/zephyr.hex
+
+      - name: Flash preview device
+        run: |
+          ./scripts/flash.sh
+
+      - name: UART validation
+        run: |
+          ./scripts/validate.sh
