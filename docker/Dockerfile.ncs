@@ -1,0 +1,63 @@
+# syntax=docker/dockerfile:1
+
+ARG UBUNTU_VERSION=24.04
+FROM ubuntu:${UBUNTU_VERSION}
+
+ARG NCS_VERSION=2.9.2
+ARG ZEPHYR_SDK_VERSION=0.17.0
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NCS_ROOT=/opt/ncs
+ENV ZEPHYR_BASE=/opt/ncs/zephyr
+ENV ZEPHYR_SDK_INSTALL_DIR=/opt/zephyr-sdk-${ZEPHYR_SDK_VERSION}
+ENV ZEPHYR_TOOLCHAIN_VARIANT=zephyr
+ENV PATH=/opt/venv/bin:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    git-lfs \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-venv \
+    cmake \
+    ninja-build \
+    gperf \
+    ccache \
+    dfu-util \
+    device-tree-compiler \
+    file \
+    make \
+    gcc \
+    g++ \
+    xz-utils \
+    unzip \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
+    && /opt/venv/bin/pip install west
+
+RUN mkdir -p /opt \
+    && wget -q "https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${ZEPHYR_SDK_VERSION}/zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-x86_64_minimal.tar.xz" -O /tmp/zephyr-sdk.tar.xz \
+    && tar -xf /tmp/zephyr-sdk.tar.xz -C /opt \
+    && rm -f /tmp/zephyr-sdk.tar.xz \
+    && cd "${ZEPHYR_SDK_INSTALL_DIR}" \
+    && ./setup.sh -t arm-zephyr-eabi -h -c
+
+RUN west init -m https://github.com/nrfconnect/sdk-nrf --mr "v${NCS_VERSION}" "${NCS_ROOT}" \
+    && cd "${NCS_ROOT}" \
+    && west update \
+    && west zephyr-export \
+    && pip install -r nrf/scripts/requirements.txt \
+    && pip install -r zephyr/scripts/requirements.txt \
+    && if [ -f bootloader/mcuboot/scripts/requirements.txt ]; then pip install -r bootloader/mcuboot/scripts/requirements.txt; fi
+
+WORKDIR /work
+
+CMD ["bash"]

@@ -74,9 +74,9 @@ jobs:
           "$NRFUTIL" --version
           "$NRFUTIL" device list
 
-      - name: Build Zephyr firmware on host
+      - name: Build Zephyr firmware in Docker NCS image
         run: |
-          ./scripts/build.sh
+          ./scripts/docker_build.sh
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
