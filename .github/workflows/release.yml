@@ -90,9 +90,9 @@ jobs:
           "$NRFUTIL" --version
           "$NRFUTIL" device list
 
-      - name: Build Zephyr firmware on host
+      - name: Build Zephyr firmware in Docker NCS image
         run: |
-          RELEASE_VERSION="${VERSION}" ./scripts/build.sh
+          RELEASE_VERSION="${VERSION}" ./scripts/docker_build.sh
 
       - name: Flash and Pytest HIL with device lock
         run: |

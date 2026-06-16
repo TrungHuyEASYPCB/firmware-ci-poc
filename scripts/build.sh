@@ -3,19 +3,29 @@ set -euo pipefail
 
 BOARD="${BOARD:-nrf52dk/nrf52832}"
 
-NCS_ROOT="${NCS_ROOT:-$HOME/ncs}"
-TOOLCHAIN_ROOT="${TOOLCHAIN_ROOT:-$NCS_ROOT/toolchains/b77d8c1312}"
-ZEPHYR_BASE="${ZEPHYR_BASE:-$NCS_ROOT/v2.9.2/zephyr}"
+if [ "${NCS_DOCKER_BUILD:-0}" = "1" ]; then
+  NCS_ROOT="${NCS_ROOT:-/opt/ncs}"
+  ZEPHYR_BASE="${ZEPHYR_BASE:-$NCS_ROOT/zephyr}"
+  ZEPHYR_SDK_INSTALL_DIR="${ZEPHYR_SDK_INSTALL_DIR:-/opt/zephyr-sdk-0.17.0}"
 
-export PATH="$TOOLCHAIN_ROOT/usr/local/bin:$PATH"
-export LD_LIBRARY_PATH="$TOOLCHAIN_ROOT/usr/local/lib:${LD_LIBRARY_PATH:-}"
-export ZEPHYR_BASE
-export CMAKE_PREFIX_PATH="$TOOLCHAIN_ROOT/cmake:${CMAKE_PREFIX_PATH:-}"
+  export ZEPHYR_BASE
+  export ZEPHYR_SDK_INSTALL_DIR
+  export ZEPHYR_TOOLCHAIN_VARIANT="${ZEPHYR_TOOLCHAIN_VARIANT:-zephyr}"
+else
+  NCS_ROOT="${NCS_ROOT:-$HOME/ncs}"
+  TOOLCHAIN_ROOT="${TOOLCHAIN_ROOT:-$NCS_ROOT/toolchains/b77d8c1312}"
+  ZEPHYR_BASE="${ZEPHYR_BASE:-$NCS_ROOT/v2.9.2/zephyr}"
 
-unset ZEPHYR_TOOLCHAIN_VARIANT
-unset ZEPHYR_SDK_INSTALL_DIR
-unset ZEPHYR_SDK_INSTALL_DIR_OVERRIDE
-unset ZEPHYR_SDK_INSTALL_DIR_OVERRIDE_DIR
+  export PATH="$TOOLCHAIN_ROOT/usr/local/bin:$PATH"
+  export LD_LIBRARY_PATH="$TOOLCHAIN_ROOT/usr/local/lib:${LD_LIBRARY_PATH:-}"
+  export ZEPHYR_BASE
+  export CMAKE_PREFIX_PATH="$TOOLCHAIN_ROOT/cmake:${CMAKE_PREFIX_PATH:-}"
+
+  unset ZEPHYR_TOOLCHAIN_VARIANT
+  unset ZEPHYR_SDK_INSTALL_DIR
+  unset ZEPHYR_SDK_INSTALL_DIR_OVERRIDE
+  unset ZEPHYR_SDK_INSTALL_DIR_OVERRIDE_DIR
+fi
 
 if [ -n "${FW_VERSION:-}" ]; then
   VERSION="$FW_VERSION"
@@ -39,11 +49,23 @@ echo "Board: $BOARD"
 echo "Firmware version: $FW_VERSION"
 echo "Firmware git commit: $FW_GIT_COMMIT"
 echo "Firmware git ref: $FW_GIT_REF"
+echo "NCS_DOCKER_BUILD: ${NCS_DOCKER_BUILD:-0}"
 echo "ZEPHYR_BASE: $ZEPHYR_BASE"
-echo "TOOLCHAIN_ROOT: $TOOLCHAIN_ROOT"
-echo "CMAKE_PREFIX_PATH: $CMAKE_PREFIX_PATH"
+echo "ZEPHYR_TOOLCHAIN_VARIANT: ${ZEPHYR_TOOLCHAIN_VARIANT:-unset}"
+echo "ZEPHYR_SDK_INSTALL_DIR: ${ZEPHYR_SDK_INSTALL_DIR:-unset}"
+echo "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH:-unset}"
+echo "west: $(command -v west || true)"
+echo "cmake: $(command -v cmake || true)"
+echo "ninja: $(command -v ninja || true)"
 
-west build -p always -b "$BOARD" .
+if [ "${NCS_DOCKER_BUILD:-0}" = "1" ]; then
+  WEST_COMMAND=(west -z "$ZEPHYR_BASE")
+else
+  WEST_COMMAND=(west)
+fi
+
+echo "WEST_COMMAND: ${WEST_COMMAND[*]}"
+"${WEST_COMMAND[@]}" build -p always -b "$BOARD" .
 
 if [ ! -f build/merged.hex ] && [ -f build/zephyr/zephyr.hex ]; then
   echo ""
