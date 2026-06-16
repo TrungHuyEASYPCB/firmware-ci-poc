@@ -9,6 +9,7 @@ devices:
 
     board: nrf52dk/nrf52832
     soc: nrf52832
+    family: nrf52
     serial: "1050325823"
 
     uart: auto

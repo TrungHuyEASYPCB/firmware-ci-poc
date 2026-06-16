@@ -1,31 +1,23 @@
 #!/bin/bash
+set -euo pipefail
 
-set -e
+SERIAL="${SERIAL:-1050325823}"
+NRFUTIL="${NRFUTIL:-nrfutil}"
 
-echo "===================="
-echo "DEVICE DETECTION"
-echo "===================="
-
-IDS=$(nrfjprog --ids 2>/dev/null)
-
-if [ -z "$IDS" ]; then
-    echo "No Nordic device detected"
+if ! command -v "$NRFUTIL" >/dev/null 2>&1; then
+  if [ -x "$HOME/.local/bin/nrfutil" ]; then
+    NRFUTIL="$HOME/.local/bin/nrfutil"
+  else
+    echo "ERROR: nrfutil not found"
     exit 1
+  fi
 fi
 
-echo "Detected devices:"
-echo "$IDS"
+"$NRFUTIL" device list | tee /tmp/nrfutil-device-list.txt
 
-mkdir -p inventory
-
-cat > inventory/devices.yaml <<EOF
-devices:
-  dut-01:
-    board: nrf52840dk
-    serial: $IDS
-    status: ready
-EOF
-
-echo ""
-echo "Generated inventory:"
-cat inventory/devices.yaml
+if grep -q "$SERIAL" /tmp/nrfutil-device-list.txt; then
+  echo "Device detected: $SERIAL"
+else
+  echo "Device not found: $SERIAL"
+  exit 1
+fi

@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: hil-device-preview
+  cancel-in-progress: false
+
 jobs:
   github-release:
     name: Build, HIL Validate and Publish Release
@@ -22,9 +26,8 @@ jobs:
       - ect1250
 
     env:
-      BOARD: nrf52dk/nrf52832
-      SERIAL: "1050325823"
-      UART_PORT: /dev/ttyACM0
+      DEVICE_ROLE: preview
+      TEST_PROFILE: smoke
       HEX_FILE: build/merged.hex
 
     steps:
@@ -51,22 +54,49 @@ jobs:
 
       - name: Prepare scripts
         run: |
-          chmod +x scripts/build.sh
-          chmod +x scripts/flash.sh
-          chmod +x scripts/validate.sh
-          chmod +x scripts/package.sh
+          chmod +x scripts/*.sh
+          chmod +x scripts/*.py
+          chmod +x scripts/drivers/*.sh 2>/dev/null || true
 
-      - name: Build Zephyr firmware
+      - name: Docker static analysis sandbox
         run: |
-          ./scripts/build.sh
+          ./scripts/docker_ci.sh
 
-      - name: Flash release device
+      - name: Discover connected devices
         run: |
-          ./scripts/flash.sh
+          python3 scripts/discover_devices.py
 
-      - name: Pytest HIL regression
+      - name: Select HIL device
         run: |
-          ./scripts/validate.sh
+          python3 scripts/select_device.py \
+            --role "$DEVICE_ROLE" \
+            --github-env "$GITHUB_ENV"
+
+      - name: Show selected device
+        run: |
+          echo "DEVICE_ID=$DEVICE_ID"
+          echo "DEVICE_ROLE=$DEVICE_ROLE"
+          echo "TEST_PROFILE=$TEST_PROFILE"
+          echo "BOARD=$BOARD"
+          echo "SERIAL=$SERIAL"
+          echo "DEVICE_FAMILY=$DEVICE_FAMILY"
+          echo "UART_PORT=$UART_PORT"
+
+          NRFUTIL="${NRFUTIL:-nrfutil}"
+          if ! command -v "$NRFUTIL" >/dev/null 2>&1; then
+            NRFUTIL="$HOME/.local/bin/nrfutil"
+          fi
+
+          "$NRFUTIL" --version
+          "$NRFUTIL" device list
+
+      - name: Build Zephyr firmware on host
+        run: |
+          RELEASE_VERSION="${VERSION}" ./scripts/build.sh
+
+      - name: Flash and Pytest HIL with device lock
+        run: |
+          ./scripts/with_device_lock.sh bash -lc './scripts/flash.sh && ./scripts/validate.sh'
 
       - name: Upload HIL reports
         if: always()
@@ -78,7 +108,7 @@ jobs:
 
       - name: Package release firmware
         run: |
-          VERSION="${VERSION}" ./scripts/package.sh
+          RELEASE_VERSION="${VERSION}" ./scripts/package.sh
 
       - name: Upload release package artifact
         uses: actions/upload-artifact@v4
