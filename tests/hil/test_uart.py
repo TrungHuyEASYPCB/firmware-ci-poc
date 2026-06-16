@@ -10,6 +10,8 @@ pytestmark = pytest.mark.hil
 
 
 SERIAL = os.environ.get("SERIAL", "1050325823")
+DEVICE_FAMILY = os.environ.get("DEVICE_FAMILY", "nrf52")
+NRFUTIL = os.environ.get("NRFUTIL", "nrfutil")
 UART_PORT = os.environ.get("UART_PORT", "/dev/ttyACM0")
 EXPECTED_BOARD = os.environ.get("EXPECTED_BOARD", os.environ.get("BOARD", "nrf52dk/nrf52832"))
 UART_LOG_FILE = Path(os.environ.get("UART_LOG_FILE", "hil-results/uart.log"))
@@ -78,7 +80,7 @@ def capture_uart_after_reset():
     time.sleep(1)
 
     reset_result = run_command(
-        ["nrfjprog", "--reset", "--snr", SERIAL],
+        [NRFUTIL, "device", "reset", "--serial-number", SERIAL, "--family", DEVICE_FAMILY, "--reset-kind", "RESET_SYSTEM"],
         check=False,
     )
 
@@ -89,7 +91,7 @@ def capture_uart_after_reset():
     uart_log = stdout + stderr
     UART_LOG_FILE.write_text(uart_log, encoding="utf-8")
 
-    print("\n===== NRFJPROG RESET OUTPUT =====")
+    print("\n===== NRFUTIL RESET OUTPUT =====")
     print(reset_output)
 
     print("\n===== UART LOG =====")
@@ -102,12 +104,12 @@ def test_uart_port_exists():
     assert os.path.exists(UART_PORT), f"UART port not found: {UART_PORT}"
 
 
-def test_device_detected_by_nrfjprog():
-    result = run_command(["nrfjprog", "--ids"], check=False)
+def test_device_detected_by_nrfutil():
+    result = run_command([NRFUTIL, "device", "list"], check=False)
     combined_output = result.stdout + result.stderr
 
     assert SERIAL in combined_output, (
-        f"Device serial {SERIAL} not found in nrfjprog output:\n"
+        f"Device serial {SERIAL} not found in nrfutil device list output:\n"
         f"{combined_output}"
     )
 

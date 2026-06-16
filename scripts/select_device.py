@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -11,42 +9,10 @@ except ImportError:
     print("ERROR: PyYAML is not installed. Install with: sudo apt install -y python3-yaml")
     sys.exit(1)
 
+from nrfutil_device import select_uart
+
 
 INVENTORY_FILE = Path("inventory/devices.yaml")
-
-
-def run_command(cmd):
-    try:
-        completed = subprocess.run(
-            cmd,
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
-        return completed.returncode, completed.stdout
-    except FileNotFoundError:
-        return 127, f"Command not found: {cmd[0]}"
-
-
-def parse_nrfjprog_com(output):
-    result = {}
-
-    for line in output.splitlines():
-        line = line.strip()
-        match = re.search(r"(\d+)\s+(\S*/dev/\S+|\S+)\s+(VCOM\d+)", line)
-        if not match:
-            continue
-
-        serial, port, vcom = match.groups()
-        result.setdefault(serial, []).append(
-            {
-                "port": port,
-                "vcom": vcom,
-            }
-        )
-
-    return result
 
 
 def load_inventory():
@@ -102,27 +68,33 @@ def resolve_uart(device):
     serial = str(device.get("serial", ""))
     preferred_vcom = str(device.get("preferred_vcom", "VCOM0"))
 
-    rc, output = run_command(["nrfjprog", "--com"])
-    if rc != 0:
-        raise RuntimeError(f"Failed to run nrfjprog --com:\n{output}")
-
-    com_map = parse_nrfjprog_com(output)
-    ports = com_map.get(serial, [])
-
-    if not ports:
-        raise RuntimeError(f"No UART port detected for serial {serial}")
-
-    for item in ports:
-        if item["vcom"] == preferred_vcom:
-            return item["port"]
-
-    return ports[0]["port"]
+    return select_uart(serial=serial, preferred_vcom=preferred_vcom)
 
 
 def csv(value):
     if isinstance(value, list):
         return ",".join(str(item) for item in value)
     return str(value or "")
+
+
+def infer_family(device):
+    family = str(device.get("family", ""))
+    if family:
+        return family
+
+    soc = str(device.get("soc", "")).lower()
+    if soc.startswith("nrf52"):
+        return "nrf52"
+    if soc.startswith("nrf53"):
+        return "nrf53"
+    if soc.startswith("nrf54l"):
+        return "nrf54l"
+    if soc.startswith("nrf54h"):
+        return "nrf54h"
+    if soc.startswith("nrf91"):
+        return "nrf91"
+
+    return ""
 
 
 def build_env(device_id, device):
@@ -136,6 +108,7 @@ def build_env(device_id, device):
         "DEVICE_PROBE": str(device.get("probe", "")),
         "DEVICE_TYPE": str(device.get("device_type", "")),
         "DEVICE_SOC": str(device.get("soc", "")),
+        "DEVICE_FAMILY": infer_family(device),
         "DEVICE_RUNNER": str(device.get("runner", "")),
         "DEVICE_LOCATION": str(device.get("location", "")),
         "DEVICE_CAPABILITIES": csv(device.get("capabilities", [])),
@@ -155,6 +128,7 @@ def print_display(env):
     print(f"Type: {env['DEVICE_TYPE']}")
     print(f"Board: {env['BOARD']}")
     print(f"SoC: {env['DEVICE_SOC']}")
+    print(f"Family: {env['DEVICE_FAMILY']}")
     print(f"Serial: {env['SERIAL']}")
     print(f"UART: {env['UART_PORT']}")
     print(f"Runner: {env['DEVICE_RUNNER']}")

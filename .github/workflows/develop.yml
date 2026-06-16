@@ -4,81 +4,97 @@ on:
   pull_request:
     branches:
       - develop
-  
   push:
     branches:
       - develop
   workflow_dispatch:
 
+concurrency:
+  group: hil-device-preview
+  cancel-in-progress: false
+
 jobs:
   build-flash-validate:
-    name: Build, Flash and UART Validate
+    name: Build, Flash and Pytest HIL (${{ matrix.device_role }} / ${{ matrix.test_profile }})
     runs-on:
       - self-hosted
       - ect1250
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device_role: preview
+            test_profile: smoke
+
     env:
-      BOARD: nrf52dk/nrf52832
-      SERIAL: "1050325823"
-      UART_PORT: /dev/ttyACM0
+      DEVICE_ROLE: ${{ matrix.device_role }}
+      TEST_PROFILE: ${{ matrix.test_profile }}
       HEX_FILE: build/merged.hex
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show runner environment
-        run: |
-          echo "Hostname:"
-          hostname
-
-          echo ""
-          echo "Current user:"
-          whoami
-
-          echo ""
-          echo "West:"
-          which west || true
-          west --version
-
-          echo ""
-          echo "Nordic devices:"
-          nrfjprog --ids || true
-
-          echo ""
-          echo "COM ports:"
-          nrfjprog --com || true
-
       - name: Prepare scripts
         run: |
-          chmod +x scripts/build.sh
-          chmod +x scripts/flash.sh
-          chmod +x scripts/validate.sh
+          chmod +x scripts/*.sh
+          chmod +x scripts/*.py
+          chmod +x scripts/drivers/*.sh 2>/dev/null || true
 
-      - name: Build Zephyr firmware
+      - name: Docker static analysis sandbox
+        run: |
+          ./scripts/docker_ci.sh
+
+      - name: Discover connected devices
+        run: |
+          python3 scripts/discover_devices.py
+
+      - name: Select HIL device
+        run: |
+          python3 scripts/select_device.py \
+            --role "$DEVICE_ROLE" \
+            --github-env "$GITHUB_ENV"
+
+      - name: Show selected device
+        run: |
+          echo "DEVICE_ID=$DEVICE_ID"
+          echo "DEVICE_ROLE=$DEVICE_ROLE"
+          echo "TEST_PROFILE=$TEST_PROFILE"
+          echo "BOARD=$BOARD"
+          echo "SERIAL=$SERIAL"
+          echo "DEVICE_FAMILY=$DEVICE_FAMILY"
+          echo "UART_PORT=$UART_PORT"
+
+          NRFUTIL="${NRFUTIL:-nrfutil}"
+          if ! command -v "$NRFUTIL" >/dev/null 2>&1; then
+            NRFUTIL="$HOME/.local/bin/nrfutil"
+          fi
+
+          "$NRFUTIL" --version
+          "$NRFUTIL" device list
+
+      - name: Build Zephyr firmware on host
         run: |
           ./scripts/build.sh
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zephyr-firmware
+          name: zephyr-firmware-${{ matrix.device_role }}-${{ matrix.test_profile }}
           path: |
             build/merged.hex
+            build/zephyr/zephyr.hex
             build/firmware-ci-poc/zephyr/zephyr.hex
 
-      - name: Flash preview device
+      - name: Flash and Pytest HIL with device lock
         run: |
-          ./scripts/flash.sh
-
-      - name: UART validation
-        run: |
-          ./scripts/validate.sh
+          ./scripts/with_device_lock.sh bash -lc './scripts/flash.sh && ./scripts/validate.sh'
 
       - name: Upload HIL reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hil-reports
+          name: hil-reports-${{ matrix.device_role }}-${{ matrix.test_profile }}
           path: |
             hil-results/**

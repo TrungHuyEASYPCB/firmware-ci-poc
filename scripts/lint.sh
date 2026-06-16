@@ -46,6 +46,25 @@ echo "Check pytest collection"
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest --collect-only -q tests
 
 echo ""
+echo "Check deprecated Nordic CLI usage"
+DEPRECATED_NORDIC_CLI_MATCHES="$(
+  grep -RIn \
+    --exclude="lint.sh" \
+    --exclude-dir=".git" \
+    --exclude-dir="build" \
+    --exclude-dir="hil-results" \
+    "nrfjprog" \
+    scripts tests .github/workflows inventory README.md docs \
+    2>/dev/null || true
+)"
+
+if [ -n "$DEPRECATED_NORDIC_CLI_MATCHES" ]; then
+  echo "$DEPRECATED_NORDIC_CLI_MATCHES"
+  echo "Deprecated Nordic CLI usage found. Use nrfutil device instead."
+  exit 1
+fi
+
+echo ""
 echo "Check shell scripts"
 mapfile -t SHELL_FILES < <(find scripts -type f -name "*.sh" | sort)
 
