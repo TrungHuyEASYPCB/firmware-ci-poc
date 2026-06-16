@@ -134,3 +134,4 @@ jobs:
             release/manifest.json
             release/checksums.sha256
             release/package.env
+            release/release-notes.md
