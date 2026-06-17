@@ -176,6 +176,11 @@ def main():
         "--public-key",
         default=os.environ.get("SIGNING_PUBLIC_KEY_PATH", "keys/firmware-signing-public.pem"),
     )
+    parser.add_argument(
+        "--skip-git-commit-check",
+        action="store_true",
+        help="Skip manifest git_commit == current HEAD check for artifact promotion",
+    )
     args = parser.parse_args()
 
     require_signature = os.environ.get("REQUIRE_FIRMWARE_SIGNATURE", "0") == "1"
@@ -238,7 +243,7 @@ def main():
 
     current_commit = git_short_commit()
 
-    if current_commit and manifest_commit != current_commit:
+    if not args.skip_git_commit_check and current_commit and manifest_commit != current_commit:
         fail(f"Manifest git_commit mismatch: expected {current_commit}, got {manifest_commit}")
 
     if manifest.get("build_info") != "build-info.json":
