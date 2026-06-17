@@ -66,6 +66,7 @@ manifest = {
     "archive": "${TAR_NAME}",
     "build_info": "build-info.json",
     "sbom": "sbom.json",
+    "release_status": "release-status.json",
 }
 
 Path("${MANIFEST_PATH}").write_text(
@@ -84,6 +85,7 @@ HEX_FILE=${HEX_NAME}
 ARCHIVE=${TAR_NAME}
 BUILD_INFO=build-info.json
 SBOM=sbom.json
+RELEASE_STATUS=release-status.json
 EOF_ENV
 
 cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
@@ -105,6 +107,11 @@ cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
 - Pytest HIL UART validation: PASS
 - Release artifact verification: PASS
 
+## Rollback
+
+- Rollback policy: docs/release-rollback-policy.md
+- Release status metadata: release-status.json
+
 ## Artifacts
 
 - ${HEX_NAME}
@@ -115,6 +122,7 @@ cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
 - release-notes.md
 - build-info.json
 - sbom.json
+- release-status.json
 EOF_NOTES
 
 python3 scripts/write_release_metadata.py \
@@ -127,13 +135,20 @@ python3 scripts/write_release_metadata.py \
   --hex-file "$HEX_NAME" \
   --archive "$TAR_NAME"
 
+python3 scripts/write_release_status.py \
+  --release-dir "$RELEASE_DIR" \
+  --version "$VERSION" \
+  --git-commit "$GIT_COMMIT" \
+  --board "$BOARD"
+
 tar -C "$RELEASE_DIR" -czf "$TAR_PATH" \
   "$HEX_NAME" \
   manifest.json \
   package.env \
   release-notes.md \
   build-info.json \
-  sbom.json
+  sbom.json \
+  release-status.json
 
 (
   cd "$RELEASE_DIR"
@@ -145,6 +160,7 @@ tar -C "$RELEASE_DIR" -czf "$TAR_PATH" \
     release-notes.md \
     build-info.json \
     sbom.json \
+    release-status.json \
     > checksums.sha256
 )
 
