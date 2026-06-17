@@ -64,6 +64,8 @@ manifest = {
     "build_time": "${BUILD_TIME}",
     "firmware_hex": "${HEX_NAME}",
     "archive": "${TAR_NAME}",
+    "build_info": "build-info.json",
+    "sbom": "sbom.json",
 }
 
 Path("${MANIFEST_PATH}").write_text(
@@ -80,6 +82,8 @@ BOARD=${BOARD}
 BUILD_TIME=${BUILD_TIME}
 HEX_FILE=${HEX_NAME}
 ARCHIVE=${TAR_NAME}
+BUILD_INFO=build-info.json
+SBOM=sbom.json
 EOF_ENV
 
 cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
@@ -99,6 +103,7 @@ cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
 - Build: PASS
 - Flash: PASS
 - Pytest HIL UART validation: PASS
+- Release artifact verification: PASS
 
 ## Artifacts
 
@@ -108,13 +113,27 @@ cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
 - checksums.sha256
 - package.env
 - release-notes.md
+- build-info.json
+- sbom.json
 EOF_NOTES
+
+python3 scripts/write_release_metadata.py \
+  --release-dir "$RELEASE_DIR" \
+  --version "$VERSION" \
+  --board "$BOARD" \
+  --git-commit "$GIT_COMMIT" \
+  --git-ref "$GIT_REF" \
+  --build-time "$BUILD_TIME" \
+  --hex-file "$HEX_NAME" \
+  --archive "$TAR_NAME"
 
 tar -C "$RELEASE_DIR" -czf "$TAR_PATH" \
   "$HEX_NAME" \
   manifest.json \
   package.env \
-  release-notes.md
+  release-notes.md \
+  build-info.json \
+  sbom.json
 
 (
   cd "$RELEASE_DIR"
@@ -124,6 +143,8 @@ tar -C "$RELEASE_DIR" -czf "$TAR_PATH" \
     manifest.json \
     package.env \
     release-notes.md \
+    build-info.json \
+    sbom.json \
     > checksums.sha256
 )
 

@@ -43,9 +43,11 @@ def git_short_commit():
 
 def sha256_file(path):
     digest = hashlib.sha256()
+
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             digest.update(chunk)
+
     return digest.hexdigest()
 
 
@@ -54,10 +56,12 @@ def parse_checksums(path):
 
     for line_no, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         line = raw_line.strip()
+
         if not line:
             continue
 
         parts = line.split(None, 1)
+
         if len(parts) != 2:
             fail(f"Invalid checksum line {line_no}: {raw_line}")
 
@@ -83,6 +87,7 @@ def verify_checksum_entries(release_dir, checksums):
             fail(f"Checksum entry points to missing file: {filename}")
 
         actual_hash = sha256_file(path)
+
         if actual_hash != expected_hash:
             fail(
                 f"Checksum mismatch for {filename}: "
@@ -90,6 +95,13 @@ def verify_checksum_entries(release_dir, checksums):
             )
 
         print(f"Checksum OK: {filename}")
+
+
+def read_json(path, label):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        fail(f"Invalid {label}: {exc}")
 
 
 def main():
@@ -100,6 +112,7 @@ def main():
     args = parser.parse_args()
 
     release_dir = Path(args.release_dir)
+
     if not release_dir.is_dir():
         fail(f"Release directory not found: {release_dir}")
 
@@ -107,42 +120,71 @@ def main():
     checksums_path = release_dir / "checksums.sha256"
     package_env_path = release_dir / "package.env"
     release_notes_path = release_dir / "release-notes.md"
+    build_info_path = release_dir / "build-info.json"
+    sbom_path = release_dir / "sbom.json"
 
     required_files = [
         manifest_path,
         checksums_path,
         package_env_path,
         release_notes_path,
+        build_info_path,
+        sbom_path,
     ]
 
     for path in required_files:
         if not path.is_file():
             fail(f"Required release file missing: {path}")
 
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        fail(f"Invalid manifest.json: {exc}")
+    manifest = read_json(manifest_path, "manifest.json")
+    build_info = read_json(build_info_path, "build-info.json")
+    sbom = read_json(sbom_path, "sbom.json")
 
     expected_version = args.version.strip() or read_expected_version()
+
     if not expected_version:
         fail("Expected version is empty. Set RELEASE_VERSION or pass --version")
 
     manifest_version = str(manifest.get("version", ""))
+
     if manifest_version != expected_version:
         fail(f"Manifest version mismatch: expected {expected_version}, got {manifest_version}")
 
     manifest_board = str(manifest.get("board", ""))
+
     if manifest_board != args.board:
         fail(f"Manifest board mismatch: expected {args.board}, got {manifest_board}")
 
     manifest_commit = str(manifest.get("git_commit", ""))
+
     if not manifest_commit:
         fail("manifest.json missing git_commit")
 
     current_commit = git_short_commit()
+
     if current_commit and manifest_commit != current_commit:
         fail(f"Manifest git_commit mismatch: expected {current_commit}, got {manifest_commit}")
+
+    if manifest.get("build_info") != "build-info.json":
+        fail("manifest.json must reference build-info.json")
+
+    if manifest.get("sbom") != "sbom.json":
+        fail("manifest.json must reference sbom.json")
+
+    if str(build_info.get("version", "")) != expected_version:
+        fail("build-info.json version mismatch")
+
+    if str(build_info.get("board", "")) != args.board:
+        fail("build-info.json board mismatch")
+
+    if str(sbom.get("version", "")) != expected_version:
+        fail("sbom.json version mismatch")
+
+    if str(sbom.get("board", "")) != args.board:
+        fail("sbom.json board mismatch")
+
+    if not sbom.get("components"):
+        fail("sbom.json has no components")
 
     hex_files = sorted(release_dir.glob(f"firmware-{expected_version}-*.hex"))
     tar_files = sorted(release_dir.glob(f"firmware-{expected_version}-*.tar.gz"))
@@ -162,9 +204,12 @@ def main():
         "manifest.json",
         "package.env",
         "release-notes.md",
+        "build-info.json",
+        "sbom.json",
     }
 
     missing_checksum_entries = sorted(expected_assets - set(checksums.keys()))
+
     if missing_checksum_entries:
         fail(
             "Missing checksum entries for release assets: "
