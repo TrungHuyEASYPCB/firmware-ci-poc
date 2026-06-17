@@ -112,13 +112,25 @@ jobs:
           path: |
             hil-results/**
 
+      - name: Prepare firmware signing key
+        env:
+          FW_SIGNING_PRIVATE_KEY_B64: ${{ secrets.FW_SIGNING_PRIVATE_KEY_B64 }}
+        run: |
+          if [ -z "$FW_SIGNING_PRIVATE_KEY_B64" ]; then
+            echo "ERROR: FW_SIGNING_PRIVATE_KEY_B64 secret is required for release signing"
+            exit 1
+          fi
+          mkdir -p .secrets
+          echo "$FW_SIGNING_PRIVATE_KEY_B64" | base64 -d > .secrets/firmware-signing-private.pem
+          chmod 600 .secrets/firmware-signing-private.pem
+
       - name: Package release firmware
         run: |
-          RELEASE_VERSION="${VERSION}" ./scripts/package.sh
+          SIGNING_KEY_PATH=".secrets/firmware-signing-private.pem" REQUIRE_FIRMWARE_SIGNATURE=1 RELEASE_VERSION="${VERSION}" ./scripts/package.sh
 
       - name: Verify release artifacts
         run: |
-          RELEASE_VERSION="${VERSION}" python3 scripts/verify_release.py --version "${VERSION}"
+          RELEASE_VERSION="${VERSION}" REQUIRE_FIRMWARE_SIGNATURE=1 python3 scripts/verify_release.py --version "${VERSION}"
 
       - name: Upload release package artifact
         uses: actions/upload-artifact@v4
@@ -134,6 +146,7 @@ jobs:
             release/build-info.json
             release/sbom.json
             release/release-status.json
+            release/signature.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -151,3 +164,4 @@ jobs:
             release/build-info.json
             release/sbom.json
             release/release-status.json
+            release/signature.json

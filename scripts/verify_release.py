@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import hashlib
 import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -104,12 +106,79 @@ def read_json(path, label):
         fail(f"Invalid {label}: {exc}")
 
 
+def verify_signature(release_dir, signature_path, public_key_path, expected_version, board, git_commit):
+    signature = read_json(signature_path, "signature.json")
+
+    if signature.get("version") != expected_version:
+        fail("signature.json version mismatch")
+
+    if signature.get("board") != board:
+        fail("signature.json board mismatch")
+
+    if signature.get("git_commit") != git_commit:
+        fail("signature.json git_commit mismatch")
+
+    firmware_name = signature.get("firmware_hex", "")
+    firmware_path = release_dir / firmware_name
+
+    if not firmware_path.is_file():
+        fail(f"signature.json points to missing firmware: {firmware_name}")
+
+    actual_firmware_hash = sha256_file(firmware_path)
+
+    if signature.get("firmware_sha256") != actual_firmware_hash:
+        fail("signature.json firmware_sha256 mismatch")
+
+    if signature.get("algorithm") != "RSA-SHA256-PKCS1v15":
+        fail("Unsupported signature algorithm")
+
+    if not public_key_path.is_file():
+        fail(f"Signing public key not found: {public_key_path}")
+
+    try:
+        signature_bytes = base64.b64decode(signature.get("signature_base64", ""), validate=True)
+    except Exception as exc:
+        fail(f"Invalid signature_base64: {exc}")
+
+    with tempfile.NamedTemporaryFile() as tmp:
+        tmp.write(signature_bytes)
+        tmp.flush()
+
+        result = subprocess.run(
+            [
+                "openssl",
+                "dgst",
+                "-sha256",
+                "-verify",
+                str(public_key_path),
+                "-signature",
+                tmp.name,
+                str(firmware_path),
+            ],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+
+    if result.returncode != 0:
+        fail(f"Firmware signature verification failed:\n{result.stdout}")
+
+    print(f"Signature OK: {signature_path.name}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Verify release artifacts")
     parser.add_argument("--release-dir", default="release")
     parser.add_argument("--version", default="")
     parser.add_argument("--board", default=os.environ.get("BOARD", "nrf52dk/nrf52832"))
+    parser.add_argument(
+        "--public-key",
+        default=os.environ.get("SIGNING_PUBLIC_KEY_PATH", "keys/firmware-signing-public.pem"),
+    )
     args = parser.parse_args()
+
+    require_signature = os.environ.get("REQUIRE_FIRMWARE_SIGNATURE", "0") == "1"
 
     release_dir = Path(args.release_dir)
 
@@ -123,6 +192,7 @@ def main():
     build_info_path = release_dir / "build-info.json"
     sbom_path = release_dir / "sbom.json"
     release_status_path = release_dir / "release-status.json"
+    signature_path = release_dir / "signature.json"
 
     required_files = [
         manifest_path,
@@ -133,6 +203,9 @@ def main():
         sbom_path,
         release_status_path,
     ]
+
+    if require_signature:
+        required_files.append(signature_path)
 
     for path in required_files:
         if not path.is_file():
@@ -176,6 +249,9 @@ def main():
 
     if manifest.get("release_status") != "release-status.json":
         fail("manifest.json must reference release-status.json")
+
+    if require_signature and manifest.get("signature") != "signature.json":
+        fail("manifest.json must reference signature.json when signing is required")
 
     if str(build_info.get("version", "")) != expected_version:
         fail("build-info.json version mismatch")
@@ -226,6 +302,19 @@ def main():
         "sbom.json",
         "release-status.json",
     }
+
+    if signature_path.is_file():
+        expected_assets.add("signature.json")
+        verify_signature(
+            release_dir=release_dir,
+            signature_path=signature_path,
+            public_key_path=Path(args.public_key),
+            expected_version=expected_version,
+            board=args.board,
+            git_commit=manifest_commit,
+        )
+    elif require_signature:
+        fail("signature.json is required but missing")
 
     missing_checksum_entries = sorted(expected_assets - set(checksums.keys()))
 

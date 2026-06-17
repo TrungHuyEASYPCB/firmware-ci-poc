@@ -6,6 +6,9 @@ echo "PACKAGE RELEASE"
 echo "===================="
 
 BOARD="${BOARD:-nrf52dk/nrf52832}"
+SIGNING_KEY_PATH="${SIGNING_KEY_PATH:-}"
+SIGNING_PUBLIC_KEY_PATH="${SIGNING_PUBLIC_KEY_PATH:-keys/firmware-signing-public.pem}"
+REQUIRE_FIRMWARE_SIGNATURE="${REQUIRE_FIRMWARE_SIGNATURE:-0}"
 
 if [ -n "${FW_VERSION:-}" ]; then
   VERSION="$FW_VERSION"
@@ -41,6 +44,25 @@ else
   exit 1
 fi
 
+SIGNING_ENABLED="0"
+
+if [ -n "$SIGNING_KEY_PATH" ]; then
+  SIGNING_ENABLED="1"
+elif [ "$REQUIRE_FIRMWARE_SIGNATURE" = "1" ]; then
+  echo "ERROR: REQUIRE_FIRMWARE_SIGNATURE=1 but SIGNING_KEY_PATH is not set"
+  exit 1
+fi
+
+if [ "$SIGNING_ENABLED" = "1" ] && [ ! -f "$SIGNING_KEY_PATH" ]; then
+  echo "ERROR: signing private key not found: $SIGNING_KEY_PATH"
+  exit 1
+fi
+
+if [ "$SIGNING_ENABLED" = "1" ] && [ ! -f "$SIGNING_PUBLIC_KEY_PATH" ]; then
+  echo "ERROR: signing public key not found: $SIGNING_PUBLIC_KEY_PATH"
+  exit 1
+fi
+
 HEX_NAME="firmware-${VERSION}-${GIT_COMMIT}.hex"
 TAR_NAME="firmware-${VERSION}-${GIT_COMMIT}.tar.gz"
 
@@ -49,6 +71,7 @@ TAR_PATH="${RELEASE_DIR}/${TAR_NAME}"
 MANIFEST_PATH="${RELEASE_DIR}/manifest.json"
 PACKAGE_ENV_PATH="${RELEASE_DIR}/package.env"
 RELEASE_NOTES_PATH="${RELEASE_DIR}/release-notes.md"
+SIGNATURE_PATH="${RELEASE_DIR}/signature.json"
 
 cp "$SOURCE_HEX" "$HEX_PATH"
 
@@ -69,6 +92,9 @@ manifest = {
     "release_status": "release-status.json",
 }
 
+if "${SIGNING_ENABLED}" == "1":
+    manifest["signature"] = "signature.json"
+
 Path("${MANIFEST_PATH}").write_text(
     json.dumps(manifest, indent=2) + "\\n",
     encoding="utf-8",
@@ -86,6 +112,9 @@ ARCHIVE=${TAR_NAME}
 BUILD_INFO=build-info.json
 SBOM=sbom.json
 RELEASE_STATUS=release-status.json
+SIGNING_ENABLED=${SIGNING_ENABLED}
+SIGNATURE=signature.json
+SIGNING_PUBLIC_KEY=${SIGNING_PUBLIC_KEY_PATH}
 EOF_ENV
 
 cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
@@ -112,6 +141,12 @@ cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
 - Rollback policy: docs/release-rollback-policy.md
 - Release status metadata: release-status.json
 
+## Signing
+
+- Signing enabled: ${SIGNING_ENABLED}
+- Signature metadata: signature.json
+- Public key: ${SIGNING_PUBLIC_KEY_PATH}
+
 ## Artifacts
 
 - ${HEX_NAME}
@@ -124,6 +159,12 @@ cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
 - sbom.json
 - release-status.json
 EOF_NOTES
+
+if [ "$SIGNING_ENABLED" = "1" ]; then
+  cat >> "$RELEASE_NOTES_PATH" <<EOF_NOTES_SIGNED
+- signature.json
+EOF_NOTES_SIGNED
+fi
 
 python3 scripts/write_release_metadata.py \
   --release-dir "$RELEASE_DIR" \
@@ -141,27 +182,46 @@ python3 scripts/write_release_status.py \
   --git-commit "$GIT_COMMIT" \
   --board "$BOARD"
 
-tar -C "$RELEASE_DIR" -czf "$TAR_PATH" \
-  "$HEX_NAME" \
-  manifest.json \
-  package.env \
-  release-notes.md \
-  build-info.json \
-  sbom.json \
+TAR_ITEMS=(
+  "$HEX_NAME"
+  manifest.json
+  package.env
+  release-notes.md
+  build-info.json
+  sbom.json
   release-status.json
+)
+
+CHECKSUM_ITEMS=(
+  "$HEX_NAME"
+  "$TAR_NAME"
+  manifest.json
+  package.env
+  release-notes.md
+  build-info.json
+  sbom.json
+  release-status.json
+)
+
+if [ "$SIGNING_ENABLED" = "1" ]; then
+  python3 scripts/sign_firmware.py \
+    --firmware "$HEX_PATH" \
+    --private-key "$SIGNING_KEY_PATH" \
+    --public-key "$SIGNING_PUBLIC_KEY_PATH" \
+    --output "$SIGNATURE_PATH" \
+    --version "$VERSION" \
+    --board "$BOARD" \
+    --git-commit "$GIT_COMMIT"
+
+  TAR_ITEMS+=(signature.json)
+  CHECKSUM_ITEMS+=(signature.json)
+fi
+
+tar -C "$RELEASE_DIR" -czf "$TAR_PATH" "${TAR_ITEMS[@]}"
 
 (
   cd "$RELEASE_DIR"
-  sha256sum \
-    "$HEX_NAME" \
-    "$TAR_NAME" \
-    manifest.json \
-    package.env \
-    release-notes.md \
-    build-info.json \
-    sbom.json \
-    release-status.json \
-    > checksums.sha256
+  sha256sum "${CHECKSUM_ITEMS[@]}" > checksums.sha256
 )
 
 echo ""
