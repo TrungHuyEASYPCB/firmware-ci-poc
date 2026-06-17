@@ -237,3 +237,4 @@ release/
 *.map
 *.uf2
 hil-results/
+.secrets/
