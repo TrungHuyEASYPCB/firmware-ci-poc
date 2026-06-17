@@ -30,11 +30,17 @@ jobs:
       TEST_PROFILE: smoke
       HEX_FILE: build/merged.hex
 
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Validate release gate
+        run: |
+          git fetch origin main --tags
+          python3 scripts/verify_release_gate.py --tag-name "${GITHUB_REF_NAME}" --main-ref origin/main
 
       - name: Resolve version
         run: |
