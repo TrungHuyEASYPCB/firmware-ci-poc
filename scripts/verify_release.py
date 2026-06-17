@@ -122,6 +122,7 @@ def main():
     release_notes_path = release_dir / "release-notes.md"
     build_info_path = release_dir / "build-info.json"
     sbom_path = release_dir / "sbom.json"
+    release_status_path = release_dir / "release-status.json"
 
     required_files = [
         manifest_path,
@@ -130,6 +131,7 @@ def main():
         release_notes_path,
         build_info_path,
         sbom_path,
+        release_status_path,
     ]
 
     for path in required_files:
@@ -139,6 +141,7 @@ def main():
     manifest = read_json(manifest_path, "manifest.json")
     build_info = read_json(build_info_path, "build-info.json")
     sbom = read_json(sbom_path, "sbom.json")
+    release_status = read_json(release_status_path, "release-status.json")
 
     expected_version = args.version.strip() or read_expected_version()
 
@@ -171,6 +174,9 @@ def main():
     if manifest.get("sbom") != "sbom.json":
         fail("manifest.json must reference sbom.json")
 
+    if manifest.get("release_status") != "release-status.json":
+        fail("manifest.json must reference release-status.json")
+
     if str(build_info.get("version", "")) != expected_version:
         fail("build-info.json version mismatch")
 
@@ -185,6 +191,18 @@ def main():
 
     if not sbom.get("components"):
         fail("sbom.json has no components")
+
+    if str(release_status.get("version", "")) != expected_version:
+        fail("release-status.json version mismatch")
+
+    if str(release_status.get("board", "")) != args.board:
+        fail("release-status.json board mismatch")
+
+    if release_status.get("lifecycle") not in {"active", "superseded", "deprecated", "revoked"}:
+        fail("release-status.json has invalid lifecycle")
+
+    if not release_status.get("rollback", {}).get("supported", False):
+        fail("release-status.json rollback.supported must be true")
 
     hex_files = sorted(release_dir.glob(f"firmware-{expected_version}-*.hex"))
     tar_files = sorted(release_dir.glob(f"firmware-{expected_version}-*.tar.gz"))
@@ -206,6 +224,7 @@ def main():
         "release-notes.md",
         "build-info.json",
         "sbom.json",
+        "release-status.json",
     }
 
     missing_checksum_entries = sorted(expected_assets - set(checksums.keys()))

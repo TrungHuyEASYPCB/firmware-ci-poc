@@ -133,6 +133,7 @@ jobs:
             release/release-notes.md
             release/build-info.json
             release/sbom.json
+            release/release-status.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -149,3 +150,4 @@ jobs:
             release/release-notes.md
             release/build-info.json
             release/sbom.json
+            release/release-status.json
