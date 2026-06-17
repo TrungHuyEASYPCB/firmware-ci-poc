@@ -123,8 +123,10 @@ jobs:
             release/*.hex
             release/manifest.json
             release/checksums.sha256
-            release/release-notes.md
             release/package.env
+            release/release-notes.md
+            release/build-info.json
+            release/sbom.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -139,3 +141,5 @@ jobs:
             release/checksums.sha256
             release/package.env
             release/release-notes.md
+            release/build-info.json
+            release/sbom.json
