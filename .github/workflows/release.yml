@@ -39,7 +39,7 @@ jobs:
 
       - name: Validate release gate
         run: |
-          git fetch origin main --tags
+          git fetch origin main --tags --force
           python3 scripts/verify_release_gate.py --tag-name "${GITHUB_REF_NAME}" --main-ref origin/main
 
       - name: Resolve version
