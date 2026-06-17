@@ -91,6 +91,11 @@ jobs:
         run: |
           ./scripts/with_device_lock.sh bash -lc './scripts/flash.sh && ./scripts/validate.sh'
 
+      - name: Package and verify release artifacts
+        run: |
+          ./scripts/package.sh
+          python3 scripts/verify_release.py
+
       - name: Upload HIL reports
         if: always()
         uses: actions/upload-artifact@v4
