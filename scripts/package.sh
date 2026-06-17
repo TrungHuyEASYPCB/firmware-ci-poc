@@ -5,60 +5,93 @@ echo "===================="
 echo "PACKAGE RELEASE"
 echo "===================="
 
-git config --global --add safe.directory "$(pwd)" || true
-
-VERSION="${VERSION:-$(cat RELEASE_VERSION 2>/dev/null || echo 0.0.0-dev)}"
-COMMIT="$(git rev-parse --short HEAD)"
-REF_NAME="${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
-BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-
 BOARD="${BOARD:-nrf52dk/nrf52832}"
-SERIAL="${SERIAL:-1050325823}"
-HEX_FILE="${HEX_FILE:-build/merged.hex}"
 
-if [ ! -f "$HEX_FILE" ]; then
-  echo "HEX file not found: $HEX_FILE"
+if [ -n "${FW_VERSION:-}" ]; then
+  VERSION="$FW_VERSION"
+elif [ -n "${RELEASE_VERSION:-}" ]; then
+  VERSION="$RELEASE_VERSION"
+elif [ -f RELEASE_VERSION ]; then
+  VERSION="$(cat RELEASE_VERSION)"
+else
+  VERSION="0.0.0-dev"
+fi
+
+GIT_COMMIT="${FW_GIT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
+GIT_REF="${FW_GIT_REF:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)}"
+BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+RELEASE_DIR="release"
+mkdir -p "$RELEASE_DIR"
+
+SOURCE_HEX=""
+
+if [ -f build/merged.hex ]; then
+  SOURCE_HEX="build/merged.hex"
+elif [ -f build/firmware-ci-poc/zephyr/zephyr.hex ]; then
+  SOURCE_HEX="build/firmware-ci-poc/zephyr/zephyr.hex"
+elif [ -f build/zephyr/zephyr.hex ]; then
+  SOURCE_HEX="build/zephyr/zephyr.hex"
+else
+  echo "ERROR: firmware hex not found"
+  echo "Expected one of:"
+  echo "  build/merged.hex"
+  echo "  build/firmware-ci-poc/zephyr/zephyr.hex"
+  echo "  build/zephyr/zephyr.hex"
   exit 1
 fi
 
-rm -rf release
-mkdir -p release
+HEX_NAME="firmware-${VERSION}-${GIT_COMMIT}.hex"
+TAR_NAME="firmware-${VERSION}-${GIT_COMMIT}.tar.gz"
 
-FIRMWARE_NAME="firmware-${VERSION}-${COMMIT}.hex"
-PACKAGE_NAME="firmware-${VERSION}-${COMMIT}.tar.gz"
+HEX_PATH="${RELEASE_DIR}/${HEX_NAME}"
+TAR_PATH="${RELEASE_DIR}/${TAR_NAME}"
+MANIFEST_PATH="${RELEASE_DIR}/manifest.json"
+PACKAGE_ENV_PATH="${RELEASE_DIR}/package.env"
+RELEASE_NOTES_PATH="${RELEASE_DIR}/release-notes.md"
 
-cp "$HEX_FILE" "release/$FIRMWARE_NAME"
+cp "$SOURCE_HEX" "$HEX_PATH"
 
-cat > release/manifest.json <<MANIFEST
-{
-  "version": "$VERSION",
-  "commit": "$COMMIT",
-  "ref": "$REF_NAME",
-  "build_time": "$BUILD_TIME",
-  "board": "$BOARD",
-  "serial": "$SERIAL",
-  "firmware": "$FIRMWARE_NAME",
-  "package": "$PACKAGE_NAME"
+python3 - <<PY
+import json
+from pathlib import Path
+
+manifest = {
+    "version": "${VERSION}",
+    "git_commit": "${GIT_COMMIT}",
+    "git_ref": "${GIT_REF}",
+    "board": "${BOARD}",
+    "build_time": "${BUILD_TIME}",
+    "firmware_hex": "${HEX_NAME}",
+    "archive": "${TAR_NAME}",
 }
-MANIFEST
 
-tar -czf "release/$PACKAGE_NAME" -C release "$FIRMWARE_NAME" manifest.json
-
-(
-  cd release
-  sha256sum "$FIRMWARE_NAME" "$PACKAGE_NAME" manifest.json > checksums.sha256
+Path("${MANIFEST_PATH}").write_text(
+    json.dumps(manifest, indent=2) + "\\n",
+    encoding="utf-8",
 )
+PY
 
-cat > release/release-notes.md <<NOTES
+cat > "$PACKAGE_ENV_PATH" <<EOF_ENV
+VERSION=${VERSION}
+GIT_COMMIT=${GIT_COMMIT}
+GIT_REF=${GIT_REF}
+BOARD=${BOARD}
+BUILD_TIME=${BUILD_TIME}
+HEX_FILE=${HEX_NAME}
+ARCHIVE=${TAR_NAME}
+EOF_ENV
+
+cat > "$RELEASE_NOTES_PATH" <<EOF_NOTES
 # Firmware v${VERSION}
 
 ## Summary
 
 - Zephyr/NCS firmware build
 - Target board: ${BOARD}
-- Hardware serial: ${SERIAL}
-- Commit: ${COMMIT}
-- Ref: ${REF_NAME}
+- Hardware serial: ${SERIAL:-unknown}
+- Commit: ${GIT_COMMIT}
+- Ref: ${GIT_REF}
 - Build time: ${BUILD_TIME}
 
 ## Validation
@@ -69,26 +102,32 @@ cat > release/release-notes.md <<NOTES
 
 ## Artifacts
 
-- ${FIRMWARE_NAME}
-- ${PACKAGE_NAME}
+- ${HEX_NAME}
+- ${TAR_NAME}
 - manifest.json
 - checksums.sha256
-NOTES
+- package.env
+- release-notes.md
+EOF_NOTES
 
-cat > release/package.env <<ENV
-VERSION=$VERSION
-COMMIT=$COMMIT
-PACKAGE_NAME=$PACKAGE_NAME
-FIRMWARE_NAME=$FIRMWARE_NAME
-ENV
+tar -C "$RELEASE_DIR" -czf "$TAR_PATH" \
+  "$HEX_NAME" \
+  manifest.json \
+  package.env \
+  release-notes.md
 
-echo "Package created:"
-ls -lah release
+(
+  cd "$RELEASE_DIR"
+  sha256sum \
+    "$HEX_NAME" \
+    "$TAR_NAME" \
+    manifest.json \
+    package.env \
+    release-notes.md \
+    > checksums.sha256
+)
 
 echo ""
-echo "Manifest:"
-cat release/manifest.json
-
-echo ""
-echo "Checksums:"
-cat release/checksums.sha256
+echo "Package completed"
+echo "Release directory:"
+ls -lh "$RELEASE_DIR"

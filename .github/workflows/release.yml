@@ -110,6 +110,10 @@ jobs:
         run: |
           RELEASE_VERSION="${VERSION}" ./scripts/package.sh
 
+      - name: Verify release artifacts
+        run: |
+          RELEASE_VERSION="${VERSION}" python3 scripts/verify_release.py --version "${VERSION}"
+
       - name: Upload release package artifact
         uses: actions/upload-artifact@v4
         with:
