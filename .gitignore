@@ -238,3 +238,4 @@ release/
 *.uf2
 hil-results/
 .secrets/
+promotion/

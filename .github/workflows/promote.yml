@@ -1,0 +1,70 @@
+name: Artifact Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: "Existing release tag to promote, for example v0.2.9"
+        required: true
+        type: string
+      channel:
+        description: "Promotion channel"
+        required: true
+        type: choice
+        options:
+          - dev
+          - rc
+          - stable
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: Promote release artifact
+    runs-on: [self-hosted, ect1250]
+
+    steps:
+      - name: Checkout promotion workflow source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare promotion workspace
+        run: |
+          rm -rf release promotion
+          mkdir -p release promotion
+
+      - name: Download source release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/download_release_assets.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --tag "${{ inputs.source_tag }}" \
+            --output-dir release
+
+      - name: Verify and promote artifact
+        env:
+          REQUIRE_FIRMWARE_SIGNATURE: "1"
+        run: |
+          python3 scripts/promote_release.py \
+            --release-dir release \
+            --output-dir promotion \
+            --source-tag "${{ inputs.source_tag }}" \
+            --channel "${{ inputs.channel }}" \
+            --require-signature
+
+      - name: Upload promotion metadata artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promotion-${{ inputs.channel }}-${{ inputs.source_tag }}
+          path: |
+            promotion/*.json
+
+      - name: Attach promotion metadata to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.source_tag }}
+          files: |
+            promotion/*.json
