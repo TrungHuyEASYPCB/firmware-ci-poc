@@ -114,6 +114,19 @@ jobs:
 
           ./scripts/with_device_lock.sh bash -lc './scripts/flash.sh && ./scripts/validate.sh'
 
+      - name: Generate nightly HIL summary report
+        if: always()
+        env:
+          DEVICE_ID: ${{ matrix.device_id }}
+          DEVICE_ROLE: ${{ matrix.role }}
+          TEST_PROFILE: ${{ matrix.profile }}
+          SERIAL: ${{ matrix.serial }}
+          BOARD: ${{ matrix.board }}
+          FAMILY: ${{ matrix.family }}
+          UART_PORT: ${{ matrix.uart_port }}
+        run: |
+          python3 scripts/write_hil_report.py --results-dir hil-results || true
+
       - name: Upload nightly HIL results
         uses: actions/upload-artifact@v4
         if: always()
