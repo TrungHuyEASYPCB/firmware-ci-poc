@@ -1,0 +1,95 @@
+name: HIL Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Test profile"
+        required: true
+        default: "smoke"
+        type: choice
+        options:
+          - smoke
+          - regression
+          - release
+      roles:
+        description: "Comma-separated device roles, for example preview or preview,regression"
+        required: true
+        default: "preview"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Generate HIL matrix
+    runs-on: [self-hosted, ect1250]
+
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Generate matrix
+        id: matrix
+        run: |
+          python3 scripts/generate_hil_matrix.py \
+            --profile "${{ inputs.profile }}" \
+            --roles "${{ inputs.roles }}" \
+            --github-output "$GITHUB_OUTPUT" \
+            --output pretty
+
+  hil:
+    name: HIL ${{ matrix.device_id }} / ${{ matrix.profile }}
+    needs: prepare
+    runs-on: [self-hosted, ect1250]
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Show matrix item
+        run: |
+          echo "Device ID: ${{ matrix.device_id }}"
+          echo "Role: ${{ matrix.role }}"
+          echo "Profile: ${{ matrix.profile }}"
+          echo "Serial: ${{ matrix.serial }}"
+          echo "Board: ${{ matrix.board }}"
+          echo "Family: ${{ matrix.family }}"
+          echo "UART: ${{ matrix.uart_port }}"
+
+      - name: Static analysis
+        run: |
+          ./scripts/docker_ci.sh
+
+      - name: Build firmware
+        run: |
+          ./scripts/docker_build.sh
+
+      - name: Flash and validate HIL
+        env:
+          DEVICE_ID: ${{ matrix.device_id }}
+          DEVICE_ROLE: ${{ matrix.role }}
+          TEST_PROFILE: ${{ matrix.profile }}
+          SERIAL: ${{ matrix.serial }}
+          BOARD: ${{ matrix.board }}
+          FAMILY: ${{ matrix.family }}
+          UART_PORT: ${{ matrix.uart_port }}
+        run: |
+          ./scripts/with_device_lock.sh bash -lc './scripts/flash.sh && ./scripts/validate.sh'
+
+      - name: Upload HIL results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hil-results-${{ matrix.device_id }}-${{ matrix.profile }}
+          path: |
+            hil-results/**
