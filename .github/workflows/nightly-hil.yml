@@ -77,6 +77,14 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Resolve firmware version
+        run: |
+          VERSION="$(cat RELEASE_VERSION)"
+          echo "RELEASE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "FIRMWARE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "EXPECTED_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "Firmware version: ${VERSION}"
+
       - name: Show matrix item
         run: |
           echo "Device ID: ${{ matrix.device_id }}"
