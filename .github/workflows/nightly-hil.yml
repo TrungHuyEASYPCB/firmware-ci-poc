@@ -77,6 +77,14 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Resolve firmware version
+        run: |
+          VERSION="$(cat RELEASE_VERSION)"
+          echo "RELEASE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "FIRMWARE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "EXPECTED_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "Firmware version: ${VERSION}"
+
       - name: Show matrix item
         run: |
           echo "Device ID: ${{ matrix.device_id }}"
@@ -126,6 +134,11 @@ jobs:
           UART_PORT: ${{ matrix.uart_port }}
         run: |
           python3 scripts/write_hil_report.py --results-dir hil-results || true
+
+      - name: Publish nightly HIL job summary
+        if: always()
+        run: |
+          python3 scripts/publish_hil_summary.py             --results-dir hil-results             --title "Nightly HIL ${{ matrix.device_id }} / ${{ matrix.profile }}"
 
       - name: Upload nightly HIL results
         uses: actions/upload-artifact@v4

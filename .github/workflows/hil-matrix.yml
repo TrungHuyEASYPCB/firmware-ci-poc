@@ -99,6 +99,11 @@ jobs:
         run: |
           python3 scripts/write_hil_report.py --results-dir hil-results || true
 
+      - name: Publish HIL job summary
+        if: always()
+        run: |
+          python3 scripts/publish_hil_summary.py             --results-dir hil-results             --title "HIL Matrix ${{ matrix.device_id }} / ${{ matrix.profile }}"
+
       - name: Upload HIL results
         uses: actions/upload-artifact@v4
         if: always()
