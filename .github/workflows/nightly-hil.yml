@@ -86,6 +86,13 @@ jobs:
           echo "EXPECTED_VERSION=${VERSION}" >> "$GITHUB_ENV"
           echo "Firmware version: ${VERSION}"
 
+      - name: Resolve test profile
+        run: |
+          python3 scripts/resolve_test_profile.py             --profile "${{ matrix.profile }}"             --output shell > /tmp/hil-profile.env
+
+          cat /tmp/hil-profile.env
+          cat /tmp/hil-profile.env >> "$GITHUB_ENV"
+
       - name: Show matrix item
         run: |
           echo "Device ID: ${{ matrix.device_id }}"
@@ -96,6 +103,9 @@ jobs:
           echo "Family: ${{ matrix.family }}"
           echo "UART: ${{ matrix.uart_port }}"
           echo "Lock ID: ${{ matrix.lock_id }}"
+          echo "Pytest markers: $PYTEST_MARKERS"
+          echo "UART capture seconds: $UART_CAPTURE_SECONDS"
+          echo "HIL retry count: $HIL_RETRY_COUNT"
 
       - name: Device preflight
         env:
