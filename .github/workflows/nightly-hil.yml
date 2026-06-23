@@ -97,6 +97,18 @@ jobs:
           echo "UART: ${{ matrix.uart_port }}"
           echo "Lock ID: ${{ matrix.lock_id }}"
 
+      - name: Device preflight
+        env:
+          DEVICE_ID: ${{ matrix.device_id }}
+          DEVICE_ROLE: ${{ matrix.role }}
+          TEST_PROFILE: ${{ matrix.profile }}
+          SERIAL: ${{ matrix.serial }}
+          BOARD: ${{ matrix.board }}
+          FAMILY: ${{ matrix.family }}
+          UART_PORT: ${{ matrix.uart_port }}
+        run: |
+          python3 scripts/device_preflight.py --results-dir hil-results
+
       - name: Static analysis
         run: |
           ./scripts/docker_ci.sh
