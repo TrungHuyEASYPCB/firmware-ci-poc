@@ -1,20 +1,40 @@
+profiles:
+  smoke:
+    description: "Fast HIL validation for PR and release sanity checks"
+    pytest_markers: "hil"
+    uart_capture_seconds: 5
+    retry_count: 0
+    expected_runtime: "fast"
+
+  regression:
+    description: "Deeper HIL validation for scheduled regression runs"
+    pytest_markers: "hil"
+    uart_capture_seconds: 8
+    retry_count: 1
+    expected_runtime: "medium"
+
+  release:
+    description: "Release-critical HIL validation"
+    pytest_markers: "hil"
+    uart_capture_seconds: 10
+    retry_count: 1
+    expected_runtime: "medium"
+
 test_matrix:
-  smoke-preview:
+  preview_smoke:
     enabled: true
     device_role: preview
     test_profile: smoke
-    description: Smoke HIL validation on preview DUT
+    description: "Default preview smoke HIL validation"
 
-# Future examples:
-#
-#  regression-preview:
-#    enabled: false
-#    device_role: preview
-#    test_profile: regression
-#    description: Extended HIL regression on preview DUT
-#
-#  smoke-production:
-#    enabled: false
-#    device_role: production
-#    test_profile: smoke
-#    description: Smoke validation on production DUT
+  preview_regression:
+    enabled: true
+    device_role: preview
+    test_profile: regression
+    description: "Preview regression HIL validation"
+
+  preview_release:
+    enabled: true
+    device_role: preview
+    test_profile: release
+    description: "Preview release-critical HIL validation"
