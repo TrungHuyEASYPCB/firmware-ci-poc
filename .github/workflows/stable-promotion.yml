@@ -1,0 +1,84 @@
+name: Stable Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: "Existing release tag to promote, for example v0.3.11"
+        required: true
+        type: string
+      channel:
+        description: "Promotion channel"
+        required: true
+        default: "stable"
+        type: choice
+        options:
+          - stable
+
+permissions:
+  contents: write
+
+jobs:
+  promote-stable:
+    name: Promote release to stable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate source tag
+        run: |
+          git fetch origin main --tags --force
+          python3 scripts/verify_release_gate.py \
+            --tag-name "${{ inputs.source_tag }}" \
+            --main-ref origin/main
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf release promotion
+          mkdir -p release promotion
+
+          gh release download "${{ inputs.source_tag }}" \
+            --dir release \
+            --clobber
+
+          ls -lah release
+
+      - name: Verify release assets
+        run: |
+          VERSION="${{ inputs.source_tag }}"
+          VERSION="${VERSION#v}"
+
+          python3 scripts/verify_release.py \
+            --version "$VERSION"
+
+      - name: Generate stable promotion metadata
+        run: |
+          python3 scripts/write_stable_promotion.py \
+            --source-tag "${{ inputs.source_tag }}" \
+            --channel "${{ inputs.channel }}" \
+            --release-dir release \
+            --output-dir promotion
+
+          cat promotion/stable-promotion.json
+          cat promotion/stable-promotion.md
+
+      - name: Upload promotion metadata to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.source_tag }}" \
+            promotion/stable-promotion.json \
+            promotion/stable-promotion.md \
+            --clobber
+
+      - name: Upload promotion artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-promotion-${{ inputs.source_tag }}
+          path: promotion/
