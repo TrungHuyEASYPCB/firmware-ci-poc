@@ -76,6 +76,9 @@ jobs:
           FAMILY: ${{ matrix.family }}
           UART_PORT: ${{ matrix.uart_port }}
         run: |
+          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
+          hash -r
+          which nrfutil || true
           python3 scripts/device_preflight.py --results-dir hil-results
 
       - name: Static analysis
