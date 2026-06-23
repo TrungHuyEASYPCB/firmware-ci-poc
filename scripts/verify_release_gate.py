@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +16,16 @@ def read_json(path):
         raise FileNotFoundError(f"Missing required file: {p}")
 
     return json.loads(p.read_text(encoding="utf-8"))
+
+
+def run_git(args):
+    return subprocess.run(
+        ["git", *args],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
 
 
 def find_first(data, keys):
@@ -60,6 +71,8 @@ def write_markdown(report, path):
         "",
         "## Release",
         "",
+        f"- Tag name: `{report.get('tag_name', '')}`",
+        f"- Main ref: `{report.get('main_ref', '')}`",
         f"- Expected version: `{report.get('expected_version', '')}`",
         f"- Reported version: `{report.get('reported_version', '')}`",
         f"- HIL status: `{report.get('hil_status', '')}`",
@@ -79,30 +92,79 @@ def write_markdown(report, path):
     Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Verify release quality gate from HIL reports")
-    parser.add_argument("--results-dir", default="hil-results")
-    parser.add_argument("--version", default="")
-    parser.add_argument("--summary-file", default="")
-    args = parser.parse_args()
+def verify_tag_gate(checks, tag_name, main_ref):
+    tag_version = normalize_version(tag_name)
 
-    results_dir = Path(args.results_dir)
-    summary_path = Path(args.summary_file) if args.summary_file else results_dir / "hil-summary.json"
+    if not tag_name:
+        add_check(checks, "tag_name_present", False, "tag name is empty")
+        return tag_version
 
-    checks = []
+    add_check(checks, "tag_name_present", True, tag_name)
+
+    tag_commit = run_git(["rev-parse", "--verify", f"{tag_name}^{{commit}}"])
+    add_check(
+        checks,
+        "tag_exists",
+        tag_commit.returncode == 0,
+        tag_commit.stdout.strip() or f"tag not found: {tag_name}",
+    )
+
+    if main_ref:
+        main_commit = run_git(["rev-parse", "--verify", main_ref])
+        add_check(
+            checks,
+            "main_ref_exists",
+            main_commit.returncode == 0,
+            main_commit.stdout.strip() or f"main ref not found: {main_ref}",
+        )
+
+        if tag_commit.returncode == 0 and main_commit.returncode == 0:
+            contained = run_git(["merge-base", "--is-ancestor", f"{tag_name}^{{}}", main_ref])
+            add_check(
+                checks,
+                "tag_contained_in_main",
+                contained.returncode == 0,
+                f"{tag_name} contained in {main_ref}"
+                if contained.returncode == 0
+                else contained.stdout.strip() or f"{tag_name} is not contained in {main_ref}",
+            )
+
+    release_version = run_git(["show", f"{tag_name}:RELEASE_VERSION"])
+    if release_version.returncode == 0:
+        file_version = normalize_version(release_version.stdout.strip())
+        add_check(
+            checks,
+            "tag_release_version_matched",
+            file_version == tag_version,
+            f"tag={tag_version}, RELEASE_VERSION={file_version}",
+        )
+    else:
+        add_check(
+            checks,
+            "tag_release_version_readable",
+            False,
+            release_version.stdout.strip() or "cannot read RELEASE_VERSION from tag",
+        )
+
+    return tag_version
+
+
+def verify_hil_gate(checks, summary_path, expected_version):
     summary = {}
+    reported_version = ""
+    hil_status = ""
 
     try:
         summary = read_json(summary_path)
         add_check(checks, "hil_summary_present", True, str(summary_path))
     except Exception as exc:
         add_check(checks, "hil_summary_present", False, str(exc))
+        return hil_status, reported_version
 
     hil_status = find_first(summary, ["status", "result", "hil_status"])
     status_ok = hil_status.lower() in PASS_VALUES
     add_check(checks, "hil_status_passed", status_ok, hil_status or "missing status")
 
-    expected_version = normalize_version(args.version)
     reported_version = normalize_version(
         find_first(
             summary,
@@ -118,32 +180,73 @@ def main():
 
     if expected_version:
         if reported_version:
-            version_ok = expected_version == reported_version
-            detail = f"expected={expected_version}, reported={reported_version}"
+            version_ok = normalize_version(expected_version) == reported_version
+            detail = f"expected={normalize_version(expected_version)}, reported={reported_version}"
         else:
             version_ok = False
-            detail = f"expected={expected_version}, reported version missing"
+            detail = f"expected={normalize_version(expected_version)}, reported version missing"
     else:
         version_ok = True
         detail = "version check skipped"
 
     add_check(checks, "release_version_matched", version_ok, detail)
 
+    return hil_status, reported_version
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Verify release quality gate")
+    parser.add_argument("--results-dir", default="hil-results")
+    parser.add_argument("--version", default="")
+    parser.add_argument("--summary-file", default="")
+
+    # Backward-compatible args used by the existing GitHub Release workflow.
+    parser.add_argument("--tag-name", default="")
+    parser.add_argument("--main-ref", default="")
+
+    args = parser.parse_args()
+
+    results_dir = Path(args.results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    checks = []
+
+    expected_version = normalize_version(args.version)
+    tag_name = args.tag_name
+    main_ref = args.main_ref
+
+    if tag_name or main_ref:
+        tag_version = verify_tag_gate(checks, tag_name, main_ref)
+        if not expected_version:
+            expected_version = tag_version
+
+    summary_path = Path(args.summary_file) if args.summary_file else results_dir / "hil-summary.json"
+
+    # If called only as the old tag/main gate before HIL exists, do not require hil-summary.json.
+    tag_only_mode = bool(tag_name or main_ref) and not summary_path.is_file()
+
+    hil_status = ""
+    reported_version = ""
+
+    if not tag_only_mode:
+        hil_status, reported_version = verify_hil_gate(checks, summary_path, expected_version)
+
     failed = [check for check in checks if check["status"] != "passed"]
     gate_status = "failed" if failed else "passed"
 
     report = {
-        "schema": "firmware-ci-poc.release-gate.v1",
+        "schema": "firmware-ci-poc.release-gate.v2",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "status": gate_status,
+        "tag_name": tag_name,
+        "main_ref": main_ref,
         "expected_version": expected_version,
         "reported_version": reported_version,
         "hil_status": hil_status,
         "summary_file": str(summary_path),
+        "tag_only_mode": tag_only_mode,
         "checks": checks,
     }
-
-    results_dir.mkdir(parents=True, exist_ok=True)
 
     json_path = results_dir / "release-gate.json"
     md_path = results_dir / "release-gate.md"
