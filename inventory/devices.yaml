@@ -20,5 +20,7 @@ devices:
     - hil
     test_profiles:
     - smoke
+    - regression
+    - release
     description: nRF52 DK preview HIL device
     uart_port: /dev/ttyACM0

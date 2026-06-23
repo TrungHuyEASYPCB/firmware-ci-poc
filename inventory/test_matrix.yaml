@@ -19,3 +19,22 @@ profiles:
     uart_capture_seconds: 10
     retry_count: 1
     expected_runtime: "medium"
+
+test_matrix:
+  preview_smoke:
+    enabled: true
+    device_role: preview
+    test_profile: smoke
+    description: "Default preview smoke HIL validation"
+
+  preview_regression:
+    enabled: true
+    device_role: preview
+    test_profile: regression
+    description: "Preview regression HIL validation"
+
+  preview_release:
+    enabled: true
+    device_role: preview
+    test_profile: release
+    description: "Preview release-critical HIL validation"
