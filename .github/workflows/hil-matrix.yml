@@ -56,6 +56,12 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Runner maintenance check
+        run: |
+          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
+          hash -r
+          python3 scripts/runner_maintenance.py --results-dir hil-results
+
       - name: Resolve test profile
         run: |
           python3 scripts/resolve_test_profile.py             --profile "${{ matrix.profile }}"             --output shell > /tmp/hil-profile.env
