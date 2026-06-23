@@ -106,6 +106,22 @@ def select_device(inventory_path, role, device_id):
     return {}
 
 
+def resolve_nrfutil():
+    candidates = [
+        shutil.which("nrfutil"),
+        str(Path.home() / ".local" / "bin" / "nrfutil"),
+        "/home/rabbit/.local/bin/nrfutil",
+        "/usr/local/bin/nrfutil",
+        "/usr/bin/nrfutil",
+    ]
+
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
+            return candidate
+
+    return ""
+
+
 def run_command(command):
     return subprocess.run(
         command,
@@ -190,7 +206,7 @@ def main():
         )
     )
 
-    nrfutil_path = shutil.which("nrfutil")
+    nrfutil_path = resolve_nrfutil()
     checks.append(
         check_status(
             "nrfutil_command",
@@ -202,7 +218,7 @@ def main():
     nrfutil_output = ""
 
     if nrfutil_path:
-        result = run_command(["nrfutil", "device", "list"])
+        result = run_command([nrfutil_path, "device", "list"])
         nrfutil_output = result.stdout.strip()
 
         serial_found = bool(serial and serial in nrfutil_output)
