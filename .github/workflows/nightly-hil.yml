@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: nightly-hil-${{ github.ref }}
@@ -139,6 +140,13 @@ jobs:
         if: always()
         run: |
           python3 scripts/publish_hil_summary.py             --results-dir hil-results             --title "Nightly HIL ${{ matrix.device_id }} / ${{ matrix.profile }}"
+
+      - name: Notify Nightly HIL failure
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/notify_hil_failure.py --results-dir hil-results
 
       - name: Upload nightly HIL results
         uses: actions/upload-artifact@v4
